@@ -1214,3 +1214,79 @@ class jdata_process():
             sample = self.add_user_behavier2_fea_day(sample,days)
             print('user behavier 2' + days + ' finished')
         return sample
+
+    def get_classes(self):
+        user_action_times = self.jdata_action.groupby(['user_id']).size().reset_index().rename(
+            columns={0: 'user_action_times'})
+        user_action5_times = self.jdata_action[self.jdata_action.type == 5].groupby(['user_id']).size().reset_index().rename(
+            columns={0: 'user_action5_times'})
+        user_action4_times = self.jdata_action[self.jdata_action.type == 4].groupby(['user_id']).size().reset_index().rename(
+            columns={0: 'user_action4_times'})
+        user_action3_times = self.jdata_action[self.jdata_action.type == 5].groupby(['user_id']).size().reset_index().rename(
+            columns={0: 'user_action3_times'})
+        user_action2_times = self.jdata_action[self.jdata_action.type == 2].groupby(['user_id']).size().reset_index().rename(
+            columns={0: 'user_action2_times'})
+        user_action1_times = self.jdata_action[self.jdata_action.type == 1].groupby(['user_id']).size().reset_index().rename(
+            columns={0: 'user_action1_times'})
+        user_action_times = pd.merge(user_action_times, user_action1_times, on='user_id', how='outer')
+        user_action_times = pd.merge(user_action_times, user_action2_times, on='user_id', how='outer')
+        user_action_times = pd.merge(user_action_times, user_action3_times, on='user_id', how='outer')
+        user_action_times = pd.merge(user_action_times, user_action4_times, on='user_id', how='outer')
+        user_action_times = pd.merge(user_action_times, user_action5_times, on='user_id', how='outer')
+        user_action_times = user_action_times.fillna(0)
+        del user_action1_times, user_action2_times, user_action3_times, user_action4_times, user_action5_times
+        gc.collect()
+
+        # 这里进行用户分群
+        # 第一类用户，发现存在只有type==2操作行为的，这部分考虑通过规则来提取，最后汇入结果看收益，当前规则 最后七天存在两次购物行为
+        class1_users = user_action_times[
+            user_action_times.user_action2_times == user_action_times.user_action_times].user_id
+        # 第二类用户，有过加购物车行为的用户
+        class2_users = user_action_times[user_action_times.user_action5_times > 0].user_id
+        # 第三类用户，除去前两类用户的结果
+        class3_users = user_action_times[
+            (~user_action_times.user_id.isin(class1_users)) & (~user_action_times.user_id.isin(class2_users))].user_id
+        return class1_users,class2_users,class3_users
+
+    def gen_rank_fea(self, sample):
+        sample = sample.fillna(0)
+        sample['user_like_cate1_rank'] = sample.groupby(['user_id', 'action_date'])['user_cate_action1_counts_1day'].rank(ascending=False, method='max', pct=True)
+        sample['user_like_cate3_rank'] = sample.groupby(['user_id', 'action_date'])['user_cate_action1_counts_3day'].rank(ascending=False, method='max', pct=True)
+        sample['user_like_cate7_rank'] = sample.groupby(['user_id', 'action_date'])['user_cate_action1_counts_7day'].rank(ascending=False, method='max', pct=True)
+        sample['user_like_cate21_rank'] = sample.groupby(['user_id', 'action_date'])['user_cate_action1_counts_21day'].rank(ascending=False, method='max', pct=True)
+
+        sample['ruser_like_cate1_rank'] = sample.groupby(['cate', 'action_date'])['user_cate_action1_counts_1day'].rank(ascending=False, method='max', pct=True)
+        sample['ruser_like_cate3_rank'] = sample.groupby(['cate', 'action_date'])['user_cate_action1_counts_3day'].rank(ascending=False, method='max', pct=True)
+        sample['ruser_like_cate7_rank'] = sample.groupby(['cate', 'action_date'])['user_cate_action1_counts_7day'].rank(ascending=False, method='max', pct=True)
+        sample['ruser_like_cate21_rank'] = sample.groupby(['cate', 'action_date'])['user_cate_action1_counts_21day'].rank(ascending=False, method='max', pct=True)
+
+        sample['user_like_shop1_rank'] = sample.groupby(['user_id', 'action_date'])['user_shop_action1_counts_1day'].rank(ascending=False, method='max', pct=True)
+        sample['user_like_shop3_rank'] = sample.groupby(['user_id', 'action_date'])['user_shop_action1_counts_3day'].rank(ascending=False, method='max', pct=True)
+        sample['user_like_shop7_rank'] = sample.groupby(['user_id', 'action_date'])['user_shop_action1_counts_7day'].rank(ascending=False, method='max', pct=True)
+        sample['user_like_shop21_rank'] = sample.groupby(['user_id', 'action_date'])['user_shop_action1_counts_21day'].rank(ascending=False, method='max', pct=True)
+
+        sample['ruser_like_shop1_rank'] = sample.groupby(['shop_id', 'action_date'])['user_shop_action1_counts_1day'].rank(ascending=False, method='max', pct=True)
+        sample['ruser_like_shop3_rank'] = sample.groupby(['shop_id', 'action_date'])['user_shop_action1_counts_3day'].rank(ascending=False, method='max', pct=True)
+        sample['ruser_like_shop7_rank'] = sample.groupby(['shop_id', 'action_date'])['user_shop_action1_counts_7day'].rank(ascending=False, method='max', pct=True)
+        sample['ruser_like_shop21_rank'] = sample.groupby(['shop_id', 'action_date'])['user_shop_action1_counts_21day'].rank(ascending=False, method='max', pct=True)
+
+        sample['sex_like_cate1_rank'] = sample.groupby(['sex', 'action_date'])['sex_cate_action1_counts_1day'].rank(ascending=False, method='max', pct=True)
+        sample['sex_like_cate3_rank'] = sample.groupby(['sex', 'action_date'])['sex_cate_action1_counts_3day'].rank(ascending=False, method='max', pct=True)
+        sample['sex_like_cate7_rank'] = sample.groupby(['sex', 'action_date'])['sex_cate_action1_counts_7day'].rank(ascending=False, method='max', pct=True)
+        sample['sex_like_cate21_rank'] = sample.groupby(['sex', 'action_date'])['sex_cate_action1_counts_21day'].rank(ascending=False, method='max', pct=True)
+
+        sample['sex_like_shop1_rank'] = sample.groupby(['sex', 'action_date'])['sex_shop_action1_counts_1day'].rank(ascending=False, method='max', pct=True)
+        sample['sex_like_shop3_rank'] = sample.groupby(['sex', 'action_date'])['sex_shop_action1_counts_3day'].rank(ascending=False, method='max', pct=True)
+        sample['sex_like_shop7_rank'] = sample.groupby(['sex', 'action_date'])['sex_shop_action1_counts_7day'].rank(ascending=False, method='max', pct=True)
+        sample['sex_like_shop21_rank'] = sample.groupby(['sex', 'action_date'])['sex_shop_action1_counts_21day'].rank(ascending=False, method='max', pct=True)
+
+        sample['age_like_cate1_rank'] = sample.groupby(['age', 'action_date'])['age_cate_action1_counts_1day'].rank(ascending=False, method='max', pct=True)
+        sample['age_like_cate3_rank'] = sample.groupby(['age', 'action_date'])['age_cate_action1_counts_3day'].rank(ascending=False, method='max', pct=True)
+        sample['age_like_cate7_rank'] = sample.groupby(['age', 'action_date'])['age_cate_action1_counts_7day'].rank(ascending=False, method='max', pct=True)
+        sample['age_like_cate21_rank'] = sample.groupby(['age', 'action_date'])['age_cate_action1_counts_21day'].rank(ascending=False, method='max', pct=True)
+
+        sample['age_like_shop1_rank'] = sample.groupby(['age', 'action_date'])['age_shop_action1_counts_1day'].rank(ascending=False, method='max', pct=True)
+        sample['age_like_shop3_rank'] = sample.groupby(['age', 'action_date'])['age_shop_action1_counts_3day'].rank(ascending=False, method='max', pct=True)
+        sample['age_like_shop7_rank'] = sample.groupby(['age', 'action_date'])['age_shop_action1_counts_7day'].rank(ascending=False, method='max', pct=True)
+        sample['age_like_shop21_rank'] = sample.groupby(['age', 'action_date'])['age_shop_action1_counts_21day'].rank(ascending=False, method='max', pct=True)
+        return sample
